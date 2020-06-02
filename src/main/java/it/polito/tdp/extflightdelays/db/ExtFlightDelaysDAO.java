@@ -10,6 +10,7 @@ import java.util.List;
 
 import it.polito.tdp.extflightdelays.model.Airline;
 import it.polito.tdp.extflightdelays.model.Airport;
+import it.polito.tdp.extflightdelays.model.CoppieAirports;
 import it.polito.tdp.extflightdelays.model.Flight;
 
 public class ExtFlightDelaysDAO {
@@ -91,4 +92,75 @@ public class ExtFlightDelaysDAO {
 			throw new RuntimeException("Error Connection Database");
 		}
 	}
+
+	public List<Airport> loadGraphAirports(int minimo) {
+		String sql = "(SELECT * from airports WHERE ID IN "
+				+ "(SELECT ORIGIN_AIRPORT_ID FROM flights GROUP BY ORIGIN_AIRPORT_ID "
+				+ "HAVING COUNT(DISTINCT AIRLINE_ID)>?)) UNION " + "(SELECT * from airports WHERE ID IN "
+				+ "(SELECT DESTINATION_AIRPORT_ID FROM flights " + "GROUP BY DESTINATION_AIRPORT_ID "
+				+ "HAVING COUNT(DISTINCT AIRLINE_ID)>?))";
+		List<Airport> result = new ArrayList<Airport>();
+
+		try {
+			Connection conn = ConnectDB.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, minimo);
+			st.setInt(2, minimo);
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				Airport airport = new Airport(rs.getInt("ID"), rs.getString("IATA_CODE"), rs.getString("AIRPORT"),
+						rs.getString("CITY"), rs.getString("STATE"), rs.getString("COUNTRY"), rs.getDouble("LATITUDE"),
+						rs.getDouble("LONGITUDE"), rs.getDouble("TIMEZONE_OFFSET"));
+				result.add(airport);
+			}
+
+			conn.close();
+			return result;
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
+
+	public List<CoppieAirports> loadGraphFlights(int minimo) {
+		String sql = "SELECT ORIGIN_AIRPORT_ID,DESTINATION_AIRPORT_ID, COUNT(*) AS C FROM flights WHERE ORIGIN_AIRPORT_ID IN"
+				+ " ((SELECT ID from airports WHERE ID IN " + "(SELECT ORIGIN_AIRPORT_ID FROM flights GROUP BY "
+				+ "ORIGIN_AIRPORT_ID HAVING COUNT(DISTINCT AIRLINE_ID)>?)) " + "UNION (SELECT ID from airports "
+				+ "WHERE ID IN (SELECT DESTINATION_AIRPORT_ID FROM " + "flights GROUP BY DESTINATION_AIRPORT_ID "
+				+ "HAVING COUNT(DISTINCT AIRLINE_ID)>?))) " + "AND DESTINATION_AIRPORT_ID IN  "
+				+ "((SELECT ID from airports "
+				+ "WHERE ID IN (SELECT ORIGIN_AIRPORT_ID FROM flights GROUP BY ORIGIN_AIRPORT_ID "
+				+ "HAVING COUNT(DISTINCT AIRLINE_ID)>?)) " + "UNION (SELECT ID from airports WHERE ID "
+				+ "IN (SELECT DESTINATION_AIRPORT_ID FROM flights " + "GROUP BY DESTINATION_AIRPORT_ID "
+				+ "HAVING COUNT(DISTINCT AIRLINE_ID)>?))) GROUP BY ORIGIN_AIRPORT_ID,DESTINATION_AIRPORT_ID";
+		List<CoppieAirports> result = new LinkedList<CoppieAirports>();
+
+		try {
+			Connection conn = ConnectDB.getConnection();
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, minimo);
+			st.setInt(2, minimo);
+			st.setInt(3, minimo);
+			st.setInt(4, minimo);
+			ResultSet rs = st.executeQuery();
+
+			while (rs.next()) {
+				CoppieAirports flight = new CoppieAirports(rs.getInt("ORIGIN_AIRPORT_ID"),
+						rs.getInt("DESTINATION_AIRPORT_ID"), rs.getInt("C"));
+				result.add(flight);
+			}
+
+			conn.close();
+			return result;
+
+		} catch (SQLException e) {
+			e.printStackTrace();
+			System.out.println("Errore connessione al database");
+			throw new RuntimeException("Error Connection Database");
+		}
+	}
+
 }
